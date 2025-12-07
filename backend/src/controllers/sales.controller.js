@@ -1,5 +1,5 @@
 
-const { search, applyFilters } = require("../services/sales.services");
+const { search, applyFilters } = require("../services/sales.service.js");
 
 function getSales(req, res) {
   try {
