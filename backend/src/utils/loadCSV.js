@@ -1,46 +1,55 @@
 const axios = require("axios");
-const unzipper = require("unzipper");
 const csv = require("csv-parser");
 
+const CSV_URL = "https://drive.google.com/uc?export=download&id=1BAWH3P2SF55QSB0p90zZoW0AESdP3pf0";
+
+// 5-minute timeout (Render is slow)
+const AXIOS_TIMEOUT = 300000;
+
 async function loadCSV() {
+  console.log("Downloading CSV from:", CSV_URL);
+
   try {
-    const csvURL = process.env.CSV_URL;
-    console.log("Downloading ZIP from:", csvURL);
-
-    // Download ZIP file as stream
-    const zipStream = await axios({
+    const response = await axios({
+      url: CSV_URL,
       method: "GET",
-      url: csvURL,
       responseType: "stream",
+      timeout: AXIOS_TIMEOUT,
+      headers: {
+        "User-Agent": "Mozilla/5.0",
+        "Accept": "text/csv",
+      },
+      maxContentLength: Infinity,
+      maxBodyLength: Infinity,
     });
-
-    console.log("ZIP downloaded, extracting...");
 
     return new Promise((resolve, reject) => {
       const results = [];
+      let rowCount = 0;
 
-      zipStream.data
-        .pipe(unzipper.Parse())
-        .on("entry", (entry) => {
-          if (entry.path.endsWith(".csv")) {
-            console.log("Extracting CSV:", entry.path);
+      response.data
+        .pipe(csv())
+        .on("data", (data) => {
+          results.push(data);
+          rowCount++;
 
-            entry
-              .pipe(csv())
-              .on("data", (row) => results.push(row))
-              .on("end", () => {
-                console.log("CSV Loaded:", results.length, "records");
-                resolve(results);
-              });
-          } else {
-            entry.autodrain();
+          if (rowCount % 50000 === 0) {
+            console.log(`Parsed: ${rowCount} rows...`);
           }
         })
-        .on("error", reject);
+        .on("end", () => {
+          console.log(`CSV Loaded Successfully: ${rowCount} rows`);
+          resolve(results);
+        })
+        .on("error", (err) => {
+          console.error("CSV Parse Error:", err);
+          reject(err);
+        });
     });
-  } catch (err) {
-    console.error("Failed to load ZIP CSV:", err);
-    throw err;
+
+  } catch (error) {
+    console.error("CSV Download Error:", error.message);
+    throw new Error("Failed to download or parse CSV");
   }
 }
 
