@@ -1,4 +1,6 @@
-const API_BASE = "https://truestate-app.onrender.com";
+import axios from "axios";
+
+const API_BASE = "https://truestate-app.onrender.com";   // ✅ Backend LIVE URL
 
 export async function getSales(params) {
   try {
@@ -6,6 +8,12 @@ export async function getSales(params) {
     return response.data;
   } catch (err) {
     console.error("API Error:", err);
-    return { data: [], totalPages: 1 };
+    return {
+      totalRecords: 0,
+      totalPages: 1,
+      page: 1,
+      limit: 10,
+      data: [],
+    };
   }
 }
