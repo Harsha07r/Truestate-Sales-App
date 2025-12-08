@@ -1,64 +1,47 @@
+const loadCSVStream = require("../utils/loadCSV");
+const { search, applyFilters, applySorting, paginate } = require("../services/sales.service");
 
-const { search, applyFilters } = require("../services/sales.service.js");
-
-function getSales(req, res) {
+async function getSales(req, res) {
   try {
-    let data = global.salesData || [];
+    // Load CSV fresh on every request (works with Render memory limits)
+    let data = await loadCSVStream();
 
+    // SEARCH
     const searchTerm = req.query.search || "";
     data = search(data, searchTerm);
 
+    // FILTERS
     const filters = {
-      region: req.query.region ? String(req.query.region).split(",").filter(Boolean) : [],
-      gender: req.query.gender ? String(req.query.gender).split(",").filter(Boolean) : [],
-      customerType: req.query.customerType ? String(req.query.customerType).split(",").filter(Boolean) : [],
-
-      category: req.query.category ? String(req.query.category).split(",").filter(Boolean) : [],
-      brand: req.query.brand ? String(req.query.brand).split(",").filter(Boolean) : [],
-      tags: req.query.tags ? String(req.query.tags).split(",").map(s => s.trim()).filter(Boolean) : [],
-
-      paymentMethod: req.query.paymentMethod ? String(req.query.paymentMethod).split(",").filter(Boolean) : [],
-      orderStatus: req.query.orderStatus ? String(req.query.orderStatus).split(",").filter(Boolean) : [],
-      deliveryType: req.query.deliveryType ? String(req.query.deliveryType).split(",").filter(Boolean) : [],
-
-      ageMin: req.query.ageMin ? Number(req.query.ageMin) : null,
-      ageMax: req.query.ageMax ? Number(req.query.ageMax) : null,
-
-      minAmount: req.query.minAmount ? Number(req.query.minAmount) : null,
-      maxAmount: req.query.maxAmount ? Number(req.query.maxAmount) : null,
-
-      dateStart: req.query.dateStart || null,
-      dateEnd: req.query.dateEnd || null,
+      region: req.query.region ? req.query.region.split(",") : [],
+      gender: req.query.gender ? req.query.gender.split(",") : [],
+      customerType: req.query.customerType ? req.query.customerType.split(",") : [],
+      category: req.query.category ? req.query.category.split(",") : [],
+      brand: req.query.brand ? req.query.brand.split(",") : [],
+      tags: req.query.tags ? req.query.tags.split(",") : [],
     };
 
     data = applyFilters(data, filters);
 
+    // SORTING
     const sort = req.query.sort || "";
-    if (sort === "date") {
-      data.sort((a, b) => new Date(b.date) - new Date(a.date)); // newest first
-    } else if (sort === "quantity") {
-      data.sort((a, b) => Number(b.quantity) - Number(a.quantity));
-    } else if (sort === "name") {
-      data.sort((a, b) => String(a.customerName).localeCompare(String(b.customerName)));
-    }
+    data = applySorting(data, sort);
 
-    const page = Math.max(1, parseInt(req.query.page) || 1);
-    const limit = 10;
-    const start = (page - 1) * limit;
-    const end = start + limit;
+    // PAGINATION
+    const page = parseInt(req.query.page) || 1;
+    const limit = 10; // fixed page size (assignment requirement)
 
-    const paginatedData = data.slice(start, end);
+    const result = paginate(data, page, limit);
 
     res.json({
       totalRecords: data.length,
-      totalPages: Math.max(1, Math.ceil(data.length / limit)),
+      totalPages: result.totalPages,
       page,
       limit,
-      data: paginatedData,
+      data: result.pageData,
     });
   } catch (err) {
-    console.error("getSales error:", err);
-    res.status(500).json({ error: "Internal server error" });
+    console.error("Error in getSales:", err);
+    res.status(500).json({ error: "Internal Server Error" });
   }
 }
 
